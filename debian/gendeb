@@ -1,0 +1,104 @@
+#!/bin/bash
+
+set -e			# Stop on first error
+set -u			# Stop on uninitialized variables
+
+set -o pipefail		# bash-specific
+
+# Variables
+export DEBEMAIL=jean@unistra.fr
+export DEBFULLNAME="Jean BENOIT"
+
+TCLSH=/usr/bin/tclsh
+TCLCONF=/usr/lib/tcl8.5/tclConfig.sh
+
+if [ $# != 1 ]
+then
+    echo "Usage: $0 version" >&2
+    exit 1
+fi
+VERSION=$1
+TGZ=netmagis-$VERSION.tar.gz
+
+if [ ! -f "gendeb-$VERSION" ]
+then
+    echo "File '$gendeb-$VERSION' not found" >&2
+    exit 1
+fi
+
+SUBST="-e s/%VERSION%/$VERSION/g"
+
+# Check the tarball
+if [ ! -f $TGZ ]
+then
+    echo "File '$TGZ' not found" >&2
+    exit 1
+fi
+
+# This function assumes that we are in the work dir (see "cd $DIR" below)
+dquilt()
+{
+    quilt --quiltrc="../quiltrc" "$@"
+}
+
+
+###############################################################################
+# Read version-specific hooks
+. ./gendeb-$VERSION
+###############################################################################
+
+# Erase package files
+rm -f netmagis_${VERSION}*.orig.tar.gz netmagis-*_${VERSION}*.deb
+
+# Create work directory
+DIR=netmagis-$VERSION
+
+rm -rf $DIR
+
+tar xzf $TGZ
+
+cd $DIR
+
+# Prepare debian directory and backup orig file
+dh_make --single --yes -f ../$TGZ
+
+#
+# Since we will patche some files in the version specific hook,
+# we must create a QUILT patch
+#
+dquilt new install.patch
+
+###############################################################################
+# Call version-specific hooks
+#
+hook_patch
+###############################################################################
+
+# Remove unused templates
+rm -f debian/*.EX debian/*.ex
+
+# Copy our Debian files
+for i in control copyright rules README.Debian
+do
+    sed $SUBST ../$i > debian/$i
+done
+
+# Generate install files (from PLIST array in gendeb-$VERSION)
+for pkgname in $PKGLIST
+do
+    echo "${PLIST[$pkgname]}" \
+	| sed -e 's/^ *//' -e '/^$/d' \
+	> debian/$pkgname.install
+done
+
+dquilt refresh
+dquilt header
+# set patch headers as per http://dep.debian.net/deps/dep3/
+dquilt header -r <<EOH
+Description: Changes needed to build deb packages
+ Path adjustments inside Makefile and example file.
+Author: $DEBFULLNAME <$DEBEMAIL>
+Forwarded: not-needed
+EOH
+
+debuild -us -uc
