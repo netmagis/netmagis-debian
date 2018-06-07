@@ -1,0 +1,100 @@
+#!/bin/sh
+
+set -e
+set -u
+
+#
+# Manage and run Docker image
+#
+# Usage:
+#    image netmagis-src-dir netmagis-debian-dir [action ...]
+#
+# Example:
+#    cd netmagis-debian
+#    ./docker/image ../netmagis . build run clean
+#    # packages are created in netmagis-debian-dir
+#
+#
+# actions
+# - build: build the Docker image and store image id SOMEWHERE
+# - run: run the Docker image, which in turn will run the ./run script
+#	note: the netmagis-<version>.tar.gz must already be generated
+# - clean: remove the Docker image
+#
+
+#
+# Memo for essential Docker commands
+#   docker build <dir>
+#   docker container ls -a
+#   docker container stop <cont-id>
+#   docker image ls
+#   docker image rm <img-id>
+#
+
+TAG=nmdeb
+
+# $1: msg to display
+usage ()
+{
+    (
+	echo "usage: $0 netmagis-src-dir netmagis-debian-dir [action ...]"
+	if [ $# != 0 ]
+	then echo "$1"
+	fi
+    ) >&2
+    exit 1
+}
+
+# $1: directory path, may be relative
+absdir ()
+{
+    if [ ! -d "$1" ]
+    then usage "directory '$1' must already exist"
+    fi
+    ( cd "$1" ; pwd)
+}
+
+if [ $# -lt 2 ]
+then
+    usage
+    exit 1
+fi
+
+NMSRC="$(absdir "$1")"
+NMDEB="$(absdir "$2")"
+
+shift 2
+
+if [ $# = 0 ]
+then
+    set build run clean
+fi
+
+for action
+do
+    case x"$action" in
+	xbuild)
+	    # Use the file "Dockerfile" in the appropriate directory
+	    # and build an image labelled with a tag so that
+	    # we can find it easily
+	    docker build --tag=$TAG $NMDEB/docker
+	    ;;
+	xrun)
+	    docker run \
+		    --rm=true \
+		    --mount "type=bind,source=$NMSRC,target=/nmsrc" \
+		    --mount "type=bind,source=$NMDEB,target=/nmdeb" \
+		    $TAG
+	    if [ $? != 0 ]
+	    then echo "Abort" >&2 ; exit 1
+	    fi
+	    # packages are located in $NMDEB directory on output
+	    ;;
+	xclean)
+	    docker image rm $TAG
+	    ;;
+	*)
+	    usage "action=build, run or clean"
+	    ;;
+    esac
+done

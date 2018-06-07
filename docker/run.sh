@@ -4,6 +4,7 @@
 # Command to run inside a Docker image
 # This command must be refered as the "CMD" in the Dockerfile
 # so that it is run with "docker run"
+# Packages are 
 #
 
 set -e			# exit on first error
@@ -11,7 +12,6 @@ set -u			# exit on uninitialized variable
 
 SRCDIR=/nmsrc		# netmagis source directory (from netmagis repo)
 DEBDIR=/nmdeb		# debian package directory (from netmagis-debian repo)
-DSTDIR=/nmvar		# destination for Debian packages
 
 VERSION=$(cd "$SRCDIR" ; make version)
 
@@ -32,7 +32,7 @@ cp $TGZ .
 ./gendeb "$VERSION"
 
 #
-# Copy generated packages
+# Locate generated packages in /nmdeb directory
 #
 
-cp *.deb $DSTDIR
+mv *.deb ..
