@@ -11,7 +11,6 @@ RUN apt install -y quilt devscripts dh-make git wget tcl8.6-dev tcl
 # when this image is run:
 #	/nmsrc:		netmagis source directory (from netmagis repo)
 #	/nmdeb:		debian package directory (from netmagis-debian repo)
-#	/nmvar:		output directory for packages
 #
 
-CMD sh /nmdeb/docker/run.sh
+CMD sh /nmdeb/build/run.sh

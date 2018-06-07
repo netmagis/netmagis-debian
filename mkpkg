@@ -1,0 +1,161 @@
+#!/bin/sh
+
+#
+# Build Debian package and test package installation with the help of Docker
+#
+# Usage:
+#    mkpkg netmagis-src-dir netmagis-debian-dir [action ...]
+#
+# Example:
+#    cd netmagis-debian
+#    ./mkpkg ../netmagis . image build test clean
+#    # packages are created in netmagis-debian-dir
+#
+#
+# actions
+# - image: create the needed Docker images
+# - build: build packages (using the build/ Docker image, which in turn
+#	will run the build/run.sh script)
+#	Note: the netmagis-<version>.tar.gz must already be generated
+#		in netmagis-src-dir
+#	Resulting Debian packages are located in netmagis-debian-dir
+# - test: test installation of generated debian packages
+#	Note: even if not used, the netmagis-src-dir arg must be supplied 
+#	Note: Debian packages are assumed to be located in netmagis-debian-dir
+# - clean: remove the Docker images
+#
+
+#
+# Memo for essential Docker commands
+#   docker build <dir>
+#   docker container ls -a
+#   docker container stop <cont-id>
+#   docker image ls
+#   docker image rm <img-id>
+#   docker run ... --interactive --tty <tag> /bin/sh
+#
+
+set -e
+set -u
+
+TAG_BUILD=nmbuild
+TAG_TEST=nmtest
+
+# $1: msg to display
+usage ()
+{
+    (
+	echo "usage: $0 netmagis-src-dir netmagis-debian-dir [action ...]"
+	if [ $# != 0 ]
+	then echo "$1"
+	fi
+    ) >&2
+    exit 1
+}
+
+# $1: directory path, may be relative
+absdir ()
+{
+    if [ ! -d "$1" ]
+    then usage "directory '$1' must already exist"
+    fi
+    ( cd "$1" ; pwd)
+}
+
+##############################################################################
+# Build images
+#
+# Use the file "Dockerfile" in the appropriate directories
+# and build an image labelled with the tag so that we can find them easily
+
+image_build ()
+{
+    docker build --tag=$TAG_BUILD $NMDEB/build
+}
+
+image_test ()
+{
+    docker build --tag=$TAG_TEST  $NMDEB/test
+}
+
+##############################################################################
+# Clean images
+#
+# Use the file "Dockerfile" in the appropriate directories
+# and build an image labelled with the tag so that we can find them easily
+
+clean_build ()
+{
+    docker image rm $TAG_BUILD
+}
+
+clean_test ()
+{
+    docker image rm $TAG_TEST
+}
+
+
+if [ $# -lt 2 ]
+then
+    usage
+    exit 1
+fi
+
+NMSRC="$(absdir "$1")"
+NMDEB="$(absdir "$2")"
+
+shift 2
+
+if [ $# = 0 ]
+then
+    set image build test clean
+fi
+
+for action
+do
+    case x"$action" in
+	ximage)
+	    image_build
+	    image_test
+	    ;;
+	ximage_build)
+	    image_build
+	    ;;
+	ximage_test)
+	    image_test
+	    ;;
+	xbuild)
+	    docker run \
+		    --rm=true \
+		    --mount "type=bind,source=$NMSRC,target=/nmsrc" \
+		    --mount "type=bind,source=$NMDEB,target=/nmdeb" \
+		    $TAG_BUILD
+	    if [ $? != 0 ]
+	    then echo "Abort" >&2 ; exit 1
+	    fi
+	    # packages are located in $NMDEB directory on output
+	    ;;
+	xtest)
+	    docker run \
+		    --rm=true \
+		    --mount "type=bind,source=$NMDEB,target=/nmdeb" \
+		    $TAG_TEST
+	    if [ $? != 0 ]
+	    then echo "Abort" >&2 ; exit 1
+	    fi
+	    ;;
+	xclean)
+	    clean_build
+	    clean_test
+	    ;;
+	xclean_build)
+	    clean_build
+	    ;;
+	xclean_test)
+	    clean_test
+	    ;;
+	*)
+	    usage "action=image, build, test or clean"
+	    ;;
+    esac
+done
