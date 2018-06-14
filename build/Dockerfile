@@ -4,7 +4,8 @@
 
 FROM debian:stretch
 RUN apt update
-RUN apt install -y quilt devscripts dh-make git wget tcl8.6-dev tcl
+RUN apt install -y quilt devscripts dh-make reprepro gnupg wget
+RUN apt install -y tcl8.6-dev tcl
 
 #
 # This command assumes that the following directories are bind-mounted

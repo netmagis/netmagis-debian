@@ -6,7 +6,7 @@
 FROM debian:stretch
 RUN apt update
 RUN apt upgrade -y
-RUN apt install -y gdebi
+RUN apt install -y gnupg
 
 #
 # This command assumes that the following directories are bind-mounted

@@ -4,11 +4,11 @@
 # Build Debian package and test package installation with the help of Docker
 #
 # Usage:
-#    mkpkg netmagis-src-dir netmagis-debian-dir [action ...]
+#    mkpkg netmagis-src-dir netmagis-debian-dir gpg-keyid [action ...]
 #
 # Example:
 #    cd netmagis-debian
-#    ./mkpkg ../netmagis . image build test clean
+#    ./mkpkg ../netmagis . debian-packages@netmagis.org image build test clean
 #    # packages are created in netmagis-debian-dir
 #
 #
@@ -45,7 +45,7 @@ TAG_TEST=nmtest
 usage ()
 {
     (
-	echo "usage: $0 netmagis-src-dir netmagis-debian-dir [action ...]"
+	echo "usage: $0 netmagis-src-dir netmagis-debian-dir gpg-keyid [action ...]"
 	if [ $# != 0 ]
 	then echo "$1"
 	fi
@@ -70,12 +70,45 @@ absdir ()
 
 image_build ()
 {
+    local DESTDIR="$NMDEB/tmp"
+    rm -rf "$DESTDIR"
+    mkdir "$DESTDIR"
+    gpg --export --output "$DESTDIR"/pub.key "$KEYID"
+    gpg --export-secret-key --output "$DESTDIR"/priv.key "$KEYID"
     docker build --tag=$TAG_BUILD $NMDEB/build
 }
 
 image_test ()
 {
     docker build --tag=$TAG_TEST  $NMDEB/test
+}
+
+##############################################################################
+# Docker run
+#
+
+# $1: tag
+# $2: "interactive" or ""
+docker_run ()
+{
+    local tag=$1
+    local inter=$2
+    local pre= post=
+
+    if [ "$inter" = "interactive" ]
+    then
+	pre="--tty --interactive"
+	post="/bin/bash"
+    fi
+
+    docker run \
+	    --rm=true \
+	    --env=DESTUID=$(id -u) \
+	    --env=DESTGID=$(id -g) \
+	    --env=KEYID="$KEYID" \
+	    --mount "type=bind,source=$NMSRC,target=/nmsrc" \
+	    --mount "type=bind,source=$NMDEB,target=/nmdeb" \
+	    $pre $tag $post
 }
 
 ##############################################################################
@@ -95,7 +128,7 @@ clean_test ()
 }
 
 
-if [ $# -lt 2 ]
+if [ $# -lt 3 ]
 then
     usage
     exit 1
@@ -103,8 +136,9 @@ fi
 
 NMSRC="$(absdir "$1")"
 NMDEB="$(absdir "$2")"
+KEYID="$3"
 
-shift 2
+shift 3
 
 if [ $# = 0 ]
 then
@@ -114,48 +148,54 @@ fi
 for action
 do
     case x"$action" in
-	ximage)
+	ximage)				# prepare both images
 	    image_build
 	    image_test
 	    ;;
-	ximage_build)
+	ximage_build)			# prepare "build" image
 	    image_build
 	    ;;
-	ximage_test)
+	ximage_test)			# prepare "test" image
 	    image_test
 	    ;;
-	xbuild)
-	    docker run \
-		    --rm=true \
-		    --mount "type=bind,source=$NMSRC,target=/nmsrc" \
-		    --mount "type=bind,source=$NMDEB,target=/nmdeb" \
-		    $TAG_BUILD
+	xkey)				# export key from personal account
+	    prepare_key
+	    ;;
+	xrun)				# run both images
+	    run_build
+	    run_test
+	    ;;
+	xrun_build)			# run "build" image
+	    docker_run $TAG_BUILD ""
 	    if [ $? != 0 ]
 	    then echo "Abort" >&2 ; exit 1
 	    fi
 	    # packages are located in $NMDEB directory on output
 	    ;;
-	xtest)
-	    docker run \
-		    --rm=true \
-		    --mount "type=bind,source=$NMDEB,target=/nmdeb" \
-		    $TAG_TEST
+	xrun_test)			# run "test" image
+	    docker_run $TAG_TEST ""
 	    if [ $? != 0 ]
 	    then echo "Abort" >&2 ; exit 1
 	    fi
 	    ;;
-	xclean)
+	xsh_build)			# interactive sh in "build" image
+	    docker_run $TAG_BUILD "interactive"
+	    ;;
+	xsh_test)			# interactive sh in "test" image
+	    docker_run $TAG_TEST "interactive"
+	    ;;
+	xclean)				# clean both images
 	    clean_build
 	    clean_test
 	    ;;
-	xclean_build)
+	xclean_build)			# clean "build" image
 	    clean_build
 	    ;;
-	xclean_test)
+	xclean_test)			# clean "test" image
 	    clean_test
 	    ;;
 	*)
-	    usage "action=image, build, test or clean"
+	    usage "action=image, run or clean [or see mkpkg file]"
 	    ;;
     esac
 done

@@ -11,6 +11,14 @@ set -u			# exit on uninitialized variable
 
 DEBDIR=/nmdeb		# debian package directory (from netmagis-debian repo)
 
+DESTDIR=$DEBDIR/tmp	# where "build" image left the "repo" dir
+
+#
+# Use GPG public key
+#
+
+apt-key add $DESTDIR/pub.key
+
 #
 # Particular case for rancid3, which insist to interactively
 # ask the user for manual configuration.
@@ -19,22 +27,14 @@ DEBDIR=/nmdeb		# debian package directory (from netmagis-debian repo)
 echo "rancid rancid/go_on boolean true" | debconf-set-selections
 
 #
-# Install all packages, except netmagis-P-dbgsym_* packages.
-# Side effect: we install packages in lexicographic order, so
-# netmagis-common.... is installed before other packages.
+# Add generated repo (in a local directory)
 #
 
-for p in $(ls $DEBDIR/*.deb | grep -v dbgsym_)
-do
-    gdebi -n $p
-done
+echo "deb file:$DESTDIR/repo stable main" > /etc/apt/sources.list.d/nm.list
+apt update
 
 #
-# Packages netmagis-P-*-dbgsym_* depend upon each corresponding
-# netmagis-P regular package. Install them after the regular packages.
+# Install all Netmagis packages
 #
 
-for p in $(ls $DEBDIR/*.deb | grep dbgsym_)
-do
-    gdebi -n $p
-done
+apt install -y "netmagis-*"

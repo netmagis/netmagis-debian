@@ -102,3 +102,32 @@ Forwarded: not-needed
 EOH
 
 debuild -us -uc
+
+#
+# Debuild moves *.deb/*.dsc/... to parent directory.
+# Create an empty Debian repo in this parent directory.
+#
+
+cd ..
+mkdir repo
+mkdir repo/conf
+sed -e 's/^ *//' > repo/conf/distributions <<'EOF'
+    Origin: netmagis
+    Label: netmagis
+    Codename: stable
+    Architectures: amd64 source
+    Components: main
+    Description: Apt repository for netmagis
+    SignWith: yes
+
+    Origin: netmagis
+    Label: netmagis
+    Codename: dev
+    Architectures: amd64 source
+    Components: main
+    Description: Dev apt repository for netmagis
+    SignWith: yes
+EOF
+
+reprepro -S Network -P optional -b repo includedeb stable *.deb
+reprepro -S Network -P optional -b repo includedsc stable *.dsc
