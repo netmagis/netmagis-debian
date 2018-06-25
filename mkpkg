@@ -109,6 +109,19 @@ docker_run ()
 	    --mount "type=bind,source=$NMSRC,target=/nmsrc" \
 	    --mount "type=bind,source=$NMDEB,target=/nmdeb" \
 	    $pre $tag $post
+    if [ $? != 0 ]
+    then echo "Abort" >&2 ; exit 1
+    fi
+}
+
+run_build ()
+{
+    docker_run $TAG_BUILD ""
+}
+
+run_test ()
+{
+    docker_run $TAG_TEST ""
 }
 
 ##############################################################################
@@ -138,6 +151,13 @@ NMSRC="$(absdir "$1")"
 NMDEB="$(absdir "$2")"
 KEYID="$3"
 
+# Check the PGP key (script aborts if this command returns an error)
+gpg --list-keys "$KEYID" > /dev/null
+
+#
+# Test arguments
+#
+
 shift 3
 
 if [ $# = 0 ]
@@ -166,17 +186,10 @@ do
 	    run_test
 	    ;;
 	xrun_build)			# run "build" image
-	    docker_run $TAG_BUILD ""
-	    if [ $? != 0 ]
-	    then echo "Abort" >&2 ; exit 1
-	    fi
+	    run_build
 	    # packages are located in $NMDEB directory on output
 	    ;;
 	xrun_test)			# run "test" image
-	    docker_run $TAG_TEST ""
-	    if [ $? != 0 ]
-	    then echo "Abort" >&2 ; exit 1
-	    fi
 	    ;;
 	xsh_build)			# interactive sh in "build" image
 	    docker_run $TAG_BUILD "interactive"
