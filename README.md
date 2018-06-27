@@ -1,8 +1,8 @@
 Tools for Netmagis Debian package creation
 ==========================================
 
-How to make Debian packages for Netmagis
-----------------------------------------
+Principles and prerequisites
+----------------------------
 
 ### Prerequisites
 
@@ -28,8 +28,10 @@ This repository contains the following directories:
 The `mkpkg` command is the main tool, which uses 2 Docker images.
 
 
-How to release Debian packages for a given Netmagis version
------------------------------------------------------------
+Step by step instructions
+-------------------------
+
+How to release Debian packages for a given Netmagis version?
 
 1. create a PGP key for testing (or distribution) purpose:
 
@@ -49,11 +51,15 @@ How to release Debian packages for a given Netmagis version
     ```
     cd ../netmagis
     git pull --all
-    git checkout                 # use the appropriate branch or tag
+    git checkout ....        # use the appropriate branch (X.Y) or tag (vX.Y.Z)
     make version
     ```
 
-3. build packages and test a pseudo-installation
+3. provide the hooks for X.Y.Z Netmagis version: provide a shell script
+    named `netmagis-debian/debian/gendeb-X.Y.Z`. See next section for
+    details.
+
+4. build packages and test a pseudo-installation with PGP public key
 
     ```
     cd ../netmagis-debian
@@ -62,9 +68,31 @@ How to release Debian packages for a given Netmagis version
 
     Built packages and repository are located in `tests` subdirectory.
 
-4. transfer the repository to the distribution server
+5. transfer the repository to the distribution server
 
     ```
     cd ../netmagis-debian/tmp
     tar cf - repo | ssh netmagis.org tar xvf - -C FIXME
     ```
+
+6. remove temporary directory
+
+    ```
+    cd ../../netmagis-debian
+    rm -r tmp
+    ```
+
+Script modifications for a new Netmagis release
+-----------------------------------------------
+
+The debian machinery is located in the `netmagis-debian/debian/gendeb`
+bash script. If the Netmagis version is X.Y.Z, `gendeb` starts by
+sourcing the `gendeb-X.Y.Z` file. This file must provide (for the 2.3.*
+releases) some shell variables and functions:
+  
+| Object | Type | Description |
+|--------|------|-------------|
+| `TCLCONF` | variable | location of `tclConfig.sh` file |
+| `PKGLIST` | variable | list of Debian packages to build |
+| `PLIST[p]` | array | each element of this array must contain the list of files provided by the package *p* |
+| `hook_patch` | function | called after `unpack` and `dh_make`, to customize files from source distribution |
